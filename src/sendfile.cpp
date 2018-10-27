@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <sys/types.h> 
 #include <string.h>
 
 #include "packet.cpp"
@@ -27,6 +28,11 @@ void createSocket()
         perror("socket()");
         exit(1);
     }
+
+    struct timeval read_timeout;
+    read_timeout.tv_sec = 0;
+    read_timeout.tv_usec = 1;
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &read_timeout, sizeof read_timeout);
 }
 
 void setupServer(in_addr_t addr, unsigned short port)
@@ -60,39 +66,36 @@ int fillBuffer(int n)
     for (int i = 0; i < n; i++) {
         printf("Iteration %d\n", i);
 
-        bool last = false;
         char data[MAX_DATA_LENGTH];
         int length;
 
+        printf("Data: ");
         for (length = 0; length < MAX_DATA_LENGTH; length++) {
             int c = fgetc(f);
             if (c == EOF) {
-                last = true;
                 break;
             }
-
             data[length] = c;
             printf("%c", data[length]);
         }
         printf("\n");
 
-        Packet packet(data, length);
-        memcpy(buf + i * MAX_PACKET_SIZE, packet.message, packet.getDataLength() + 10);
-
-        for (int i = 0; i < packet.getDataLength() + 10; i++) {
-            printf("%x\n", buf[i]);
-        }
-
-        if (last) {
+        if (length == 0) {
             printf("EOF, %d packets\n", i);
+            printf("\n");
             return i;
         }
+
+        Packet packet(data, length);
+        memcpy(buf + i * MAX_PACKET_SIZE, packet.message, packet.getDataLength() + 10);
+        printf("Packet %d created\n", packet.getSequenceNumber());
     }
+    printf("\n");
+    return n;
 }
 
 int main(int argc, char **argv)
 {
-
     /* argv[4] is internet address of server argv[5] is port of server.
     * Convert the port from ascii to integer and then from host byte
     * order to network byte order.
@@ -123,16 +126,17 @@ int main(int argc, char **argv)
     printf("\n");
 
     while (int n = fillBuffer(maxPacketsInBuffer)) {
+        printf("%d packet(s) in buffer\n\n", n);
         for (int i = 0; i < n; i++) {
-            printf("Sending packet %d...\n", i);
-            Packet tmp("", 0);
-            tmp.message = buf + i * MAX_PACKET_SIZE;
+            Packet tmp(buf + i * MAX_PACKET_SIZE);
+            printf("Packet %d sent\n", tmp.getSequenceNumber());
             tmp.printMessage();
-            printf("Success\n");
         }
 
         if (n < maxPacketsInBuffer) {
             break;
         }
+
+        printf("\n");
     }
 }

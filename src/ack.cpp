@@ -3,9 +3,13 @@
 
 class ACK {
     public:
-        ACK(uint32_t nextSequenceNumber) {
-            setACK();
-            setNextSequenceNumber(nextSequenceNumber);
+        ACK(uint32_t sequenceNumber, bool isAcknowledged) {
+            setACK(isAcknowledged);
+            if (isAcknowledged) {
+                setSequenceNumber(sequenceNumber + 1);
+            } else {
+                setSequenceNumber(sequenceNumber);
+            }
             setChecksum(calculateChecksum());
         }
 
@@ -13,22 +17,22 @@ class ACK {
             return message[0];
         }
 
-        uint32_t getNextSequenceNumber() {
-            uint32_t nextSequenceNumber;
-            memcpy(&nextSequenceNumber, message + 1, sizeof(nextSequenceNumber));
-            return nextSequenceNumber;
+        uint32_t getSequenceNumber() {
+            uint32_t sequenceNumber;
+            memcpy(&sequenceNumber, message + 1, sizeof(sequenceNumber));
+            return sequenceNumber;
         }
 
         char getChecksum() {
             return message[5];
         }
 
-        void setACK() {
-            message[0] = 0;
+        void setACK(bool isAcknowledged) {
+            message[0] = isAcknowledged;
         }
 
-        void setNextSequenceNumber(uint32_t& nextSequenceNumber) {
-            memcpy(message + 1, &nextSequenceNumber, sizeof(nextSequenceNumber));
+        void setSequenceNumber(uint32_t sequenceNumber) {
+            memcpy(message + 1, &sequenceNumber, sizeof(sequenceNumber));
         }
 
         void setChecksum(char checksum) {

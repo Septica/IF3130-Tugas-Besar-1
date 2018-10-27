@@ -5,6 +5,10 @@
 const uint32_t MAX_DATA_LENGTH = 3;
 class Packet {
     public:
+        Packet(char rawMessage[]) {
+            message = rawMessage;
+        }
+
         Packet(char data[], uint32_t length) {
             message = new char[10 + length];
             

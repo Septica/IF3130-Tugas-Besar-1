@@ -37,7 +37,7 @@ class Packet {
 
         char* getData() {
             char* data = new char[getDataLength()];
-            memcpy(&data, message + 9, getDataLength());
+            memcpy(data, message + 9, getDataLength());
             return data;
         }
 
@@ -88,7 +88,7 @@ class Packet {
 
         const char SOH = 0x1;
         char* message;
-    private:
+
         static uint32_t nextSequenceNumber;
         
 };

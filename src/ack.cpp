@@ -3,6 +3,10 @@
 
 class ACK {
     public:
+        ACK(char rawData[]) {
+            memcpy(message, rawData, 6);
+        }
+
         ACK(uint32_t sequenceNumber, bool isAcknowledged) {
             setACK(isAcknowledged);
             if (isAcknowledged) {

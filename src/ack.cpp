@@ -24,7 +24,7 @@ class ACK {
         }
 
         void setACK() {
-            message[0] = -1;
+            message[0] = 0;
         }
 
         void setNextSequenceNumber(uint32_t& nextSequenceNumber) {

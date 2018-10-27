@@ -13,6 +13,10 @@ class Packet {
             setData(data);
             setChecksum(calculateChecksum());
         }
+
+        char getSOH() {
+            return message[0];
+        }
         
         uint32_t getSequenceNumber() {
             uint32_t sequenceNumber;
@@ -61,7 +65,7 @@ class Packet {
 
         char calculateChecksum() {
             char sum = 0;
-            for (int i = 0; i < 10 + getDataLength(); i++) {
+            for (int i = 0; i < 9 + getDataLength(); i++) {
                 sum += message[i];
             }
             return sum;

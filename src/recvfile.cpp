@@ -9,8 +9,20 @@ int main(int argc, char *argv[])
 {
     int s;
     uint32_t namelen, client_address_size;
+    unsigned short port;
     struct sockaddr_in client, server;
     char buf[32];
+
+    /* argv[4] is internet address of server argv[5] is port of server.
+    * Convert the port from ascii to integer and then from host byte
+    * order to network byte order.
+    */
+    if (argc != 4)
+    {
+        printf("Usage: %s <filename> <windowsize> <buffersize> <port> \n", argv[0]);
+        exit(1);
+    }
+    port = htons(atoi(argv[4]));
 
     /*
     * Create a datagram socket in the internet domain and use the
@@ -34,24 +46,14 @@ int main(int argc, char *argv[])
     * interface.)
     */
     server.sin_family = AF_INET;         /* Server is in Internet Domain */
-    server.sin_port = 0;                 /* Use any available port      */
-    server.sin_addr.s_addr = INADDR_ANY; /* Server's Internet Address   */
+    server.sin_port = port;              /* Use this port                */
+    server.sin_addr.s_addr = INADDR_ANY; /* Server's Internet Address    */
 
     if (bind(s, (struct sockaddr *)&server, sizeof(server)) < 0)
     {
         perror("bind()");
         exit(2);
     }
-
-    /* Find out what port was really assigned and print it */
-    namelen = sizeof(server);
-    if (getsockname(s, (struct sockaddr *)&server, &namelen) < 0)
-    {
-        perror("getsockname()");
-        exit(3);
-    }
-
-    printf("Port assigned is %d\n", ntohs(server.sin_port));
 
     /*
     * Receive a message on socket s in buf  of maximum size 32
@@ -76,8 +78,7 @@ int main(int argc, char *argv[])
     * so we use a utility that converts it to a string printed in
     * dotted decimal format for readability.
     */
-    printf("Received message %s from domain %s port %d internet\
- address %s\n",
+    printf("Received message %s from domain %s port %d internet address %s\n",
            buf,
            (client.sin_family == AF_INET ? "AF_INET" : "UNKNOWN"),
            ntohs(client.sin_port),

@@ -43,23 +43,21 @@ void dealocateSocket()
     close(s);
 }
 
-void sendPacket(Packet *packet)
+void sendPacket(Packet& packet)
 {
-    packet->printMessage();
+    packet.printMessage();
     /* Send the message in buf to the server */
-    if (sendto(s, packet->message, (packet->getDataLength() + 10), 0, (struct sockaddr *)&server, sizeof(server)) < 0)
+    if (sendto(s, packet.message, packet.getDataLength() + 10, 0, (struct sockaddr *)&server, sizeof(server)) < 0)
     {
         perror("sendto()");
         exit(2);
     }
-
-    
 }
 
 int fillBuffer(int n)
 {
     printf("Filling buffer...\n");
-    for (int i = 0; i < n;) {
+    for (int i = 0; i < n; i++) {
         printf("Iteration %d\n", i);
 
         bool last = false;
@@ -79,19 +77,15 @@ int fillBuffer(int n)
         printf("\n");
 
         Packet packet(data, length);
-        printf("Copying...\n");
-        packet.printMessage();
-        memcpy(buf + i * MAX_PACKET_SIZE, &packet, packet.getDataLength());
+        memcpy(buf + i * MAX_PACKET_SIZE, packet.message, packet.getDataLength() + 10);
 
-        printf("try printing...\n");
-        Packet *tmp = (Packet *)buf + i * MAX_PACKET_SIZE;
-        tmp->printMessage();
-
-        i++;
+        for (int i = 0; i < packet.getDataLength() + 10; i++) {
+            printf("%x\n", buf[i]);
+        }
 
         if (last) {
             printf("EOF, %d packets\n", i);
-            return length;
+            return i;
         }
     }
 }
@@ -131,10 +125,14 @@ int main(int argc, char **argv)
     while (int n = fillBuffer(maxPacketsInBuffer)) {
         for (int i = 0; i < n; i++) {
             printf("Sending packet %d...\n", i);
-            Packet *tmp = (Packet *)buf + i * MAX_PACKET_SIZE;
-            tmp->printMessage();
-            sendPacket((Packet *)buf + i * MAX_PACKET_SIZE);
-            printf("Success");
+            Packet tmp("", 0);
+            tmp.message = buf + i * MAX_PACKET_SIZE;
+            tmp.printMessage();
+            printf("Success\n");
+        }
+
+        if (n < maxPacketsInBuffer) {
+            break;
         }
     }
 }

@@ -40,7 +40,7 @@ class Packet {
 
         void printMessage() {
             for( int i = 0; i < 10 + getDataLength(); i++) {
-                printf("%c", message[i]);
+                printf("%x", message[i]);
             }
             printf("\n");
         }

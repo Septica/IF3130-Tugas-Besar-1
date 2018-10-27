@@ -6,12 +6,12 @@ class Packet {
     public:
         Packet(char data[], uint32_t length) {
             message = new char[10 + length];
-            memcpy(message + 0, &SOH, sizeof(SOH));
-            memcpy(message + 1, &nextSequenceNumber, sizeof(nextSequenceNumber));
-            memcpy(message + 5, &length, sizeof(length));
-            memcpy(message + 9, data, length);
-            char checksum = calculateChecksum();
-            memcpy(message + 9 + length, &checksum, sizeof(checksum));
+            
+            setSOH();
+            setSequenceNumber();
+            setDataLength(length);
+            setData(data);
+            setChecksum(calculateChecksum());
         }
         
         uint32_t getSequenceNumber() {
@@ -38,17 +38,26 @@ class Packet {
             return checksum;
         }
 
-        void printMessage() {
-            for( int i = 0; i < 10 + 1; i++) {
-                printf("Byte %d: %x\n", i, message[i]);
-            }
+        void setSOH() {
+            memcpy(message + 0, &SOH, sizeof(SOH));
         }
 
-        const char SOH = 0x1;
-        
-    private:
-        static uint32_t nextSequenceNumber;
-        char* message;
+        void setSequenceNumber() {
+            memcpy(message + 1, &nextSequenceNumber, sizeof(nextSequenceNumber));
+            nextSequenceNumber++;
+        }
+
+        void setDataLength(const uint32_t& dataLength) {
+            memcpy(message + 5, &dataLength, sizeof(dataLength));
+        } 
+
+        void setData(char data[]) {
+            memcpy(message + 9, data, getDataLength());
+        }
+
+        void setChecksum(char checksum) {
+            memcpy(message + 9 + getDataLength(), &checksum, sizeof(checksum));
+        }
 
         char calculateChecksum() {
             char sum = 0;
@@ -57,4 +66,21 @@ class Packet {
             }
             return sum;
         }
+
+        bool checkChecksum() {
+            return calculateChecksum() == getChecksum();
+        }
+
+        void printMessage() {
+            for( int i = 0; i < 10 + 1; i++) {
+                printf("Byte %d: %x\n", i, message[i]);
+            }
+        }
+
+        const char SOH = 0x1;
+        
+        static uint32_t nextSequenceNumber;
+        char* message;
+
+        
 };

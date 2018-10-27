@@ -2,6 +2,7 @@
 #include <cstring>
 #include <stdio.h>
 
+const uint32_t MAX_DATA_LENGTH = 1024;
 class Packet {
     public:
         Packet(char data[], uint32_t length) {
@@ -76,15 +77,14 @@ class Packet {
         }
 
         void printMessage() {
-            for( int i = 0; i < 10 + 1; i++) {
+            for(int i = 0; i < 10 + getDataLength(); i++) {
                 printf("Byte %d: %x\n", i, message[i]);
             }
         }
 
         const char SOH = 0x1;
-        
-        static uint32_t nextSequenceNumber;
         char* message;
-
+    private:
+        static uint32_t nextSequenceNumber;
         
 };

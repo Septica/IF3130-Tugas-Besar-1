@@ -1,0 +1,1 @@
+g++ src/main.cpp src/packet.cpp -o test && ./test

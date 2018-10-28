@@ -156,7 +156,7 @@ int main(int argc, char **argv)
     printf("\n");
 
     int bufferSize = atoi(argv[3]);
-    buf = new char[bufferSize];
+    buf = new char[bufferSize * MAX_PACKET_SIZE];
 
     uint32_t lastACK = 0;
     uint32_t windowSize = atoi(argv[2]);

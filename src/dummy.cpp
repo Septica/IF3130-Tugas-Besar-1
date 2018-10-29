@@ -136,7 +136,7 @@ int main(int argc, char *argv[])
     while ((lastACK = receivePacket(lastACK)) > 0)
     {
         printf("Need Packet : %d\n\n", lastACK);
-        ACK ack(lastACK, true);
+        ACK ack(lastACK - 1, true);
         sendto(s, ack.message, 6, 0, (struct sockaddr *)&client, sizeof(client));
     }
 

@@ -8,6 +8,9 @@
 #include "ack.cpp"
 #include "packet.cpp"
 
+int s; //This is the socket container
+struct sockaddr_in client, server; //This is client and server address
+
 void createSocket()
 {
     if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -33,7 +36,37 @@ void bindServer()
     }
 }
 
+void prepareFile(char *fileName)
+{
+    printf("Opening '%s'...\n", fileName);
+    f = fopen(fileName, "w");
+    if (f == NULL)
+    {
+        printf("Failed. Exiting.\n");
+        exit(0);
+    }
+    printf("Success\n");
+    printf("\n");
+}
+
 int main(int argc, char ** argv)
 {
-        
+    //Check if args count not equals to 5
+    if (argc != 5)
+    {
+        printf("Usage: %s <filename> <windowsize> <buffersize> <port> \n", argv[0]);
+        exit(1);
+    }
+
+    //Socket Setup
+    createSocket();
+    setupServer(htons(atoi(argv[4])));
+    bindServer();
+
+    //Preparing output file
+    prepareFile(argv[1]);
+
+    //Create window
+    
+    //Send ACK(N) if RequestNumber(N) got in
 }

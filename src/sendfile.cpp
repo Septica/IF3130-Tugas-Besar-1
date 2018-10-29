@@ -20,8 +20,6 @@ FILE *f;
 
 time_t timeout = 3;
 
-int32_t isACKReceived = 0;
-
 void createSocket()
 {
     if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -113,7 +111,7 @@ int fillBuffer(int n)
     return n;
 }
 
-int32_t receiveACK(int32_t lastACK)
+uint32_t receiveACK(uint32_t lastACK)
 {
     char tmp[6];
     uint32_t server_address_size = sizeof(server);
@@ -184,7 +182,12 @@ int main(int argc, char **argv)
             clock_gettime(CLOCK_MONOTONIC, &tp_end);
 
             while (tp_end.tv_sec - tp_start.tv_sec < timeout) {
-                lastACK = receiveACK(lastACK);
+                uint32_t receivedACK = receiveACK(lastACK);
+                if (receivedACK != lastACK) {
+                    lastACK = receivedACK;
+                    break;;
+                }
+                
                 clock_gettime(CLOCK_MONOTONIC, &tp_end);
                 printf("%ld\n", tp_end.tv_sec - tp_start.tv_sec);
             }

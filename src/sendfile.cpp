@@ -15,10 +15,7 @@ uint32_t Packet::nextSequenceNumber = 0;
 int s;
 struct sockaddr_in server;
 char *buf;
-
 FILE *f;
-
-const int MAX_PACKET_SIZE = MAX_DATA_LENGTH + 10;
 
 void createSocket()
 {
@@ -119,6 +116,7 @@ int32_t receiveACK(int32_t lastACK)
     {
         return lastACK;
     }
+
     ACK ack(tmp);
     if (ack.checkChecksum())
     {
@@ -187,11 +185,9 @@ int main(int argc, char **argv)
         printf("\n");
     }
 
-    char end[10];
-    for (int i = 0; i < 10; i++)
-    {
-        end[i] = 0;
-    }
+    delete[] buf;
+
+    char end[10] = {};
     Packet endPacket(end);
     sendPacket(endPacket);
 }

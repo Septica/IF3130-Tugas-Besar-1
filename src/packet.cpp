@@ -3,6 +3,8 @@
 #include <stdio.h>
 
 const uint32_t MAX_DATA_LENGTH = 3;
+const int MAX_PACKET_SIZE = MAX_DATA_LENGTH + 10;
+
 class Packet {
     public:
         Packet(char rawMessage[]) {
@@ -36,9 +38,7 @@ class Packet {
         }
 
         char* getData() {
-            char* data = new char[getDataLength()];
-            memcpy(data, message + 9, getDataLength());
-            return data;
+            return message + 9;
         }
 
         char getChecksum() {

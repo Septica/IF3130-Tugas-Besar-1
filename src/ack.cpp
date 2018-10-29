@@ -9,11 +9,7 @@ class ACK {
 
         ACK(uint32_t sequenceNumber, bool isAcknowledged) {
             setACK(isAcknowledged);
-            if (isAcknowledged) {
-                setSequenceNumber(sequenceNumber + 1);
-            } else {
-                setSequenceNumber(sequenceNumber);
-            }
+            setSequenceNumber(sequenceNumber);
             setChecksum(calculateChecksum());
         }
 

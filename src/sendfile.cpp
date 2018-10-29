@@ -123,7 +123,7 @@ void receiveACK()
 
         if (ack.checkChecksum())
         {
-            printf("Received good ACK: %d " , ack.getSequenceNumber());
+            printf("Received good ACK: %d ", ack.getSequenceNumber());
             if (ack.getSequenceNumber() >= left && ack.getSequenceNumber() <= right)
             {
                 printf("ACCEPTED\n");
@@ -174,11 +174,16 @@ int main(int argc, char **argv)
     buf = new char[bufferSize * MAX_PACKET_SIZE];
 
     uint32_t windowSize = atoi(argv[2]);
-    uint32_t left = 0, right = left + windowSize;
 
+        std::thread recv_ack(receiveACK);
+
+        left = 0;
+        right = left + windowSize;
     while (int n = fillBuffer(bufferSize))
     {
         printf("%d packet(s) in buffer\n\n", n);
+
+        
 
         window_ack_mask = new bool[windowSize];
         window_sent_time = new timespec[windowSize];
@@ -190,7 +195,6 @@ int main(int argc, char **argv)
             window_sent_mask[i] = false;
         }
 
-        std::thread recv_ack(receiveACK);
 
         while (true)
         {
@@ -214,11 +218,16 @@ int main(int argc, char **argv)
                     window_sent_mask[i] = false;
                     window_ack_mask[i] = false;
                 }
+                left += shift;
+                right = left + windowSize;
+                printf("SHIFTED Left: %d Right %d\n", left, right);
+
+                if (left % bufferSize == 0) break;
             }
 
             for (int i = 0; i < windowSize; i++)
             {
-                if (i + left >= n)
+                if (i + left % bufferSize >= n)
                     break;
 
                 timespec now;
@@ -226,19 +235,22 @@ int main(int argc, char **argv)
                 if (!window_sent_mask[i] ||
                     !window_ack_mask[i] && now.tv_sec - window_sent_time[i].tv_sec > 2)
                 {
-                    Packet tmp(buf + (i + left) * MAX_PACKET_SIZE);
+                    Packet tmp(buf + (i + left % bufferSize) * MAX_PACKET_SIZE);
                     sendPacket(tmp);
 
                     window_sent_mask[i] = true;
                     clock_gettime(CLOCK_MONOTONIC, &window_sent_time[i]);
                 }
             }
+
+            if (left >= Packet::nextSequenceNumber) break;
         }
+
+        printf("Out\n");
 
         delete[] window_ack_mask;
         delete[] window_sent_time;
         delete[] window_sent_mask;
-        recv_ack.join();
         Packet lastPacket(buf + (n - 1) * MAX_PACKET_SIZE);
         if (lastPacket.getDataLength() < MAX_DATA_LENGTH || n < bufferSize)
             break;
@@ -246,9 +258,10 @@ int main(int argc, char **argv)
         printf("\n");
     }
 
-    delete[] buf;
-
     char end[10] = {};
     Packet endPacket(end);
     sendPacket(endPacket);
+
+    recv_ack.join();
+    delete[] buf;
 }

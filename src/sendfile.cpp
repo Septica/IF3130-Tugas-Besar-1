@@ -6,6 +6,7 @@
 #include <arpa/inet.h>
 #include <sys/types.h>
 #include <string.h>
+#include <time.h>
 
 #include "packet.cpp"
 #include "ack.cpp"
@@ -17,6 +18,10 @@ struct sockaddr_in server;
 char *buf;
 FILE *f;
 
+time_t timeout = 3;
+
+int32_t isACKReceived = 0;
+
 void createSocket()
 {
     if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -26,7 +31,7 @@ void createSocket()
     }
 
     struct timeval read_timeout;
-    read_timeout.tv_sec = 5;
+    read_timeout.tv_sec = 1;
     read_timeout.tv_usec = 0;
     setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, &read_timeout, sizeof(read_timeout));
 }
@@ -174,7 +179,16 @@ int main(int argc, char **argv)
                 sendPacket(tmp);
             }
 
-            lastACK = receiveACK(lastACK);
+            struct timespec tp_start, tp_end;
+            clock_gettime(CLOCK_MONOTONIC, &tp_start);
+            clock_gettime(CLOCK_MONOTONIC, &tp_end);
+
+            while (tp_end.tv_sec - tp_start.tv_sec < timeout) {
+                lastACK = receiveACK(lastACK);
+                clock_gettime(CLOCK_MONOTONIC, &tp_end);
+                printf("%ld\n", tp_end.tv_sec - tp_start.tv_sec);
+            }
+
             printf("\n");
         }
 

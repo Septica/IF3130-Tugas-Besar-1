@@ -6,9 +6,13 @@ Lossless Data Transfer
 1. Jalankan makefile, dengan cara mengetikkan './makefile.sh' pada terminal
 2. Jalankan RecvFile pada satu terminal dengan cara mengetikkan './RecvFile <Filename> <Windowsize> <Buffersize> <Port>'.
 3. Jalankan SendFile pada terminal lainnya dengan cara mengetikkan './SendFile <Filename> <Windowsize> <Buffersize> <DestinationIP> <DestinationPort>'.
+<br/>
 P.S. filename pada SendFile adalah nama file yang akan dikirim misalkan 'send.txt' yang disimpan pada folder sample. Sedangkan filename pada RecvFile adalah nama file yang akan diterima misalkan 'received.txt' yang akan disimpan pada folder result   
 
 # Cara Kerja Sliding Window dalam Program
 
 
-#Pembagian Tugas
+# Pembagian Tugas
+1. Felix Septianus - 13516041
+2. Dicky Adrian - 13516050
+3. Cornelius Yan - 13516113

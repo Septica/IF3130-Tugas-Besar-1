@@ -4,8 +4,8 @@ Lossless Data Transfer
 # Cara Penggunaan
 
 1. Jalankan makefile, dengan cara mengetikkan "./makefile.sh" pada terminal
-2. Jalankan RecvFile pada satu terminal dengan cara mengetikkan "./RecvFile &lt; Filename &gt; <Windowsize> <Buffersize> <Port>".
-3. Jalankan SendFile pada terminal lainnya dengan cara mengetikkan "./SendFile <Filename> <Windowsize> <Buffersize> <DestinationIP> <DestinationPort>".
+2. Jalankan RecvFile pada satu terminal dengan cara mengetikkan "./RecvFile &lt;Filename&gt; &lt;Windowsize&gt; &lt;Buffersize&gt; &lt;Port&gt;".
+3. Jalankan SendFile pada terminal lainnya dengan cara mengetikkan "./SendFile &lt;Filename&gt; &lt;Windowsize&gt; &lt;Buffersize&gt; &lt;DestinationIP&gt; &lt;DestinationPort&gt;".
 <br/>
 P.S. filename pada SendFile adalah nama file yang akan dikirim misalkan "send.txt" yang disimpan pada folder sample. Sedangkan filename pada RecvFile adalah nama file yang akan diterima misalkan "received.txt" yang akan disimpan pada folder result   
 

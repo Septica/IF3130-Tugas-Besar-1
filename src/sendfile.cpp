@@ -26,6 +26,8 @@ uint32_t left, right;
 bool *window_ack_mask, *window_sent_mask;
 timespec *window_sent_time;
 
+bool end;
+
 void createSocket()
 {
     if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -114,7 +116,7 @@ int fillBuffer(int n)
 void receiveACK()
 {
     char tmp[6];
-    while (true)
+    while (!end)
     {
         uint32_t server_address_size = sizeof(server);
         recvfrom(s, tmp, sizeof(tmp), 0, (struct sockaddr *)&server, &server_address_size);
@@ -147,7 +149,8 @@ void receiveACK()
     }
 }
 
-void prepareFile(char *filename) {
+void prepareFile(char *filename)
+{
     printf("Opening '%s'...\n", filename);
     f = fopen(filename, "r");
     if (f == NULL)
@@ -156,6 +159,12 @@ void prepareFile(char *filename) {
         exit(0);
     }
     printf("Success\n");
+}
+
+void sendEOF(){
+    char endMessage[10] = {};
+    Packet endPacket(endMessage);
+    sendPacket(endPacket);
 }
 
 int main(int argc, char **argv)
@@ -170,7 +179,7 @@ int main(int argc, char **argv)
     bindClient();
     setupServer(inet_addr(argv[4]), htons(atoi(argv[5])));
     prepareFile(argv[1]);
-    
+
     printf("\n");
 
     int bufferSize = atoi(argv[3]);
@@ -178,6 +187,11 @@ int main(int argc, char **argv)
 
     uint32_t windowSize = atoi(argv[2]);
 
+    window_ack_mask = new bool[windowSize];
+    window_sent_mask = new bool[windowSize];
+    window_sent_time = new timespec[windowSize];
+
+    end = false;
     std::thread recv_ack(receiveACK);
 
     left = 0;
@@ -185,10 +199,6 @@ int main(int argc, char **argv)
     while (int n = fillBuffer(bufferSize))
     {
         printf("%d packet(s) in buffer\n\n", n);
-
-        window_ack_mask = new bool[windowSize];
-        window_sent_time = new timespec[windowSize];
-        window_sent_mask = new bool[windowSize];
 
         for (int i = 0; i < windowSize; i++)
         {
@@ -200,23 +210,21 @@ int main(int argc, char **argv)
         {
             if (window_ack_mask[0])
             {
-                int shift = 0;
-                for (int i = 1; i < windowSize; i++)
+                int shift;
+                for (shift = 1; window_ack_mask[shift] && shift < windowSize; shift++);
+                for (int i = 0; i < windowSize; i++)
                 {
-                    shift++;
-                    if (!window_ack_mask[i])
-                        break;
-                }
-                for (int i = 0; i < windowSize - shift; i++)
-                {
-                    window_ack_mask[i] = window_ack_mask[i + shift];
-                    window_sent_time[i] = window_sent_time[i + shift];
-                    window_sent_mask[i] = window_sent_mask[i + shift];
-                }
-                for (int i = windowSize - shift; i < windowSize; i++)
-                {
-                    window_sent_mask[i] = false;
-                    window_ack_mask[i] = false;
+                    if (i < windowSize - shift)
+                    {
+                        window_ack_mask[i] = window_ack_mask[i + shift];
+                        window_sent_time[i] = window_sent_time[i + shift];
+                        window_sent_mask[i] = window_sent_mask[i + shift];
+                    }
+                    else
+                    {
+                        window_sent_mask[i] = false;
+                        window_ack_mask[i] = false;
+                    }
                 }
                 left += shift;
                 right = left + windowSize;
@@ -244,18 +252,16 @@ int main(int argc, char **argv)
                 }
             }
         }
-
-        delete[] window_ack_mask;
-        delete[] window_sent_time;
-        delete[] window_sent_mask;
-
         printf("\n");
     }
 
-    char end[10] = {};
-    Packet endPacket(end);
-    sendPacket(endPacket);
+    delete[] window_ack_mask;
+    delete[] window_sent_time;
+    delete[] window_sent_mask;
 
+    sendEOF();
+
+    end = true;
     recv_ack.join();
     delete[] buf;
 }

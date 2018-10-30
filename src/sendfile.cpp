@@ -24,7 +24,6 @@ time_t timeout = 3;
 uint32_t left, right;
 
 bool *window_ack_mask, *window_sent_mask;
-timespec *window_sent_time;
 
 bool end;
 
@@ -189,7 +188,7 @@ int main(int argc, char **argv)
 
     window_ack_mask = new bool[windowSize];
     window_sent_mask = new bool[windowSize];
-    window_sent_time = new timespec[windowSize];
+    timespec *window_sent_time = new timespec[windowSize];
 
     end = false;
     std::thread recv_ack(receiveACK);

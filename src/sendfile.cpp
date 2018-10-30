@@ -97,10 +97,9 @@ int fillBuffer(int n)
 
         for (length = 0; length < MAX_DATA_LENGTH; length++)
         {
-            int c = fgetc(f);
-            if (c == EOF)
+            data[length] = fgetc(f);
+            if (data[length] == EOF)
                 break;
-            data[length] = c;
         }
 
         if (length == 0)
@@ -148,6 +147,17 @@ void receiveACK()
     }
 }
 
+void prepareFile(char *filename) {
+    printf("Opening '%s'...\n", filename);
+    f = fopen(filename, "r");
+    if (f == NULL)
+    {
+        printf("Failed. Exiting.\n");
+        exit(0);
+    }
+    printf("Success\n");
+}
+
 int main(int argc, char **argv)
 {
     if (argc != 6)
@@ -159,15 +169,8 @@ int main(int argc, char **argv)
     createSocket();
     bindClient();
     setupServer(inet_addr(argv[4]), htons(atoi(argv[5])));
-
-    printf("Opening '%s'...\n", argv[1]);
-    f = fopen(argv[1], "r");
-    if (f == NULL)
-    {
-        printf("Failed. Exiting.\n");
-        exit(0);
-    }
-    printf("Success\n");
+    prepareFile(argv[1]);
+    
     printf("\n");
 
     int bufferSize = atoi(argv[3]);
@@ -175,15 +178,13 @@ int main(int argc, char **argv)
 
     uint32_t windowSize = atoi(argv[2]);
 
-        std::thread recv_ack(receiveACK);
+    std::thread recv_ack(receiveACK);
 
-        left = 0;
-        right = left + windowSize;
+    left = 0;
+    right = left + windowSize;
     while (int n = fillBuffer(bufferSize))
     {
         printf("%d packet(s) in buffer\n\n", n);
-
-        
 
         window_ack_mask = new bool[windowSize];
         window_sent_time = new timespec[windowSize];
@@ -195,8 +196,7 @@ int main(int argc, char **argv)
             window_sent_mask[i] = false;
         }
 
-
-        while (true)
+        while (left < Packet::nextSequenceNumber)
         {
             if (window_ack_mask[0])
             {
@@ -222,7 +222,8 @@ int main(int argc, char **argv)
                 right = left + windowSize;
                 printf("SHIFTED Left: %d Right %d\n", left, right);
 
-                if (left % bufferSize == 0) break;
+                if (left % bufferSize == 0)
+                    break;
             }
 
             for (int i = 0; i < windowSize; i++)
@@ -242,18 +243,11 @@ int main(int argc, char **argv)
                     clock_gettime(CLOCK_MONOTONIC, &window_sent_time[i]);
                 }
             }
-
-            if (left >= Packet::nextSequenceNumber) break;
         }
-
-        printf("Out\n");
 
         delete[] window_ack_mask;
         delete[] window_sent_time;
         delete[] window_sent_mask;
-        Packet lastPacket(buf + (n - 1) * MAX_PACKET_SIZE);
-        if (lastPacket.getDataLength() < MAX_DATA_LENGTH || n < bufferSize)
-            break;
 
         printf("\n");
     }

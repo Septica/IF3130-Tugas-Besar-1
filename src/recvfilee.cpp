@@ -4,6 +4,8 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <thread>
+#include <time.h>
 
 #include "ack.cpp"
 #include "packet.cpp"
@@ -11,7 +13,11 @@
 int s; //This is the socket container
 struct sockaddr_in client, server; //This is client and server address
 FILE *f; //this is the file to be written
-char* buf
+char* buf;
+int bufferSize;
+
+uint32_t left, right;
+bool *window_message_mask;
 
 void createSocket()
 {
@@ -51,14 +57,42 @@ void prepareFile(char *fileName)
     printf("\n");
 }
 
+void sendACK(){
+    ACK ack(left, true);
+    uint32_t serverAddressSize = sizeof(server);
+    sendto(s, &ack, sizeof(ack), 0, (struct sockaddr*)&server, sizeof(server));
+}
+
 void receiveMessage()
 {
-    serverAddressSize = sizeof(server);
-    recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr*)&server);
-    Packet packet(buf);
+    char tmp[MAX_PACKET_SIZE];
+    uint32_t serverAddressSize = sizeof(server);
+    recvfrom(s, tmp, sizeof(tmp), 0, (struct sockaddr*)&server, &serverAddressSize);
+    Packet packet(tmp);
     if (packet.checkChecksum()){
-        
+        printf("Received good packet: %d", packet.getSequenceNumber());
+        if (packet.getSequenceNumber() <= right){
+            if (packet.getSequenceNumber()>=left){
+                printf("Accepted\n");
+                memcpy(buf+(packet.getSequenceNumber()%bufferSize),packet.getData(),packet.getDataLength());
+                if(packet.getSOH()){
+                    window_message_mask[packet.getSequenceNumber() - left] = true;
+                }
+                else{
+                    window_message_mask[packet.getSequenceNumber() - left] = false;
+                }
+            }
+        }
     }
+    else {
+        printf("Error Checksum \n");
+    }
+}
+
+void writeToFile()
+{
+    printf("Writing to file...\n");
+    fprintf(f, "%s", buf);
 }
 
 int main(int argc, char ** argv)
@@ -77,10 +111,28 @@ int main(int argc, char ** argv)
 
     //Preparing output file
     prepareFile(argv[1]);
+    bufferSize = atoi(argv[3]);
+    buf = new char[bufferSize * MAX_PACKET_SIZE];
 
-    while(1){
-        //Create window
+    uint32_t windowSize = atoi(argv[2]);
 
-        //Send ACK(N) if RequestNumber(N) got in
+
+    //Create window
+    window_message_mask = new bool[windowSize];
+    left = 0;
+    right = windowSize-1;
+    bool done = false;
+    while (!done){
+        receiveMessage();
+        printf("Buf right now is: %s\n", buf);
+        writeToFile();
+        sendACK();
+        left++;
+        right++;
+        if (buf == NULL){
+            done = true;
+        }
     }
+    close(s);
+    //Send ACK(N) if RequestNumber(N) got in
 }

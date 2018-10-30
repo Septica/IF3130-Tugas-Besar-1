@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+#include <thread>
 
 #include "ack.cpp"
 #include "packet.cpp"
@@ -15,8 +16,12 @@ char *buf;
 FILE *f;
 
 int bufferSize;
-uint32_t lastSequenceNumber;
+uint32_t left, right;
 
+bool *window_packet_mask;
+
+uint32_t eofSeq;
+uint32_t eofLength;
 bool end = false;
 
 void createSocket()
@@ -73,40 +78,53 @@ void prepareFile(char *fileName)
     printf("\n");
 }
 
-void writePacket(char data[], uint32_t length)
-{
-    for (uint32_t i = 0; i < length; i++)
-        fputc(data[i], f);
+void sendACK(int sequenceNumber, bool isAcknowledged) {
+    ACK ack(sequenceNumber, true);
+    sendto(s, ack.message, sizeof(ack.message), 0, (struct sockaddr *)&client, sizeof(client));
+    printf("Send ACK: %d\n", sequenceNumber);
 }
 
-int receivePacket(int lastACK)
+int receivePacket()
 {
-    char tmp[MAX_PACKET_SIZE];
-    client_address_size = sizeof(client);
-    if (recvfrom(s, tmp, sizeof(tmp), 0, (struct sockaddr *)&client, &client_address_size) < 0)
-    {
-        perror("recvfrom()");
-        exit(4);
-    }
-
-    Packet packet(tmp);
-    if (packet.checkChecksum())
-    {
-        if (packet.getSOH())
+    while (!end) {
+        char tmp[MAX_PACKET_SIZE];
+        client_address_size = sizeof(client);
+        if (recvfrom(s, tmp, sizeof(tmp), 0, (struct sockaddr *)&client, &client_address_size) < 0)
         {
-            if (packet.getSequenceNumber() == lastACK)
+            perror("recvfrom()");
+            exit(4);
+        }
+
+        Packet packet(tmp);
+        if (packet.checkChecksum())
+        {
+            uint32_t seq = packet.getSequenceNumber();
+            if (packet.getDataLength() > 0)
             {
-                writePacket(packet.getData(), packet.getDataLength());
-                return lastACK + 1;
+                printf("Received Packet: %d\n", seq);
+                if (seq < right)
+                {
+                    if (seq >= left) {
+                        uint32_t length = packet.getDataLength();
+                        memcpy(buf + seq % bufferSize, packet.getData(), length);
+                        if (length < MAX_DATA_LENGTH) {
+                            eofSeq = seq;
+                            eofLength = length;
+                            end = true;
+                        }
+
+                        window_packet_mask[seq - left] = true;
+                    }
+                    sendACK(seq, true);
+                }
             }
             else
             {
-                return lastACK;
+                printf("EOF\n");
+                eofSeq = seq - 1;
+                eofLength = MAX_DATA_LENGTH;
+                end = true;
             }
-        }
-        else
-        {
-            return -1;
         }
     }
 }
@@ -127,20 +145,47 @@ int main(int argc, char *argv[])
     prepareFile(argv[1]);
 
     bufferSize = atoi(argv[3]);
-    buf = new char[bufferSize * MAX_PACKET_SIZE];
+    buf = new char[bufferSize * MAX_DATA_LENGTH];
 
-    int lastACK = 0;
     uint32_t windowSize = atoi(argv[2]);
-
-    while ((lastACK = receivePacket(lastACK)) > 0)
+    window_packet_mask = new bool[windowSize];
+    for (int i = 0; i < windowSize; i++)
     {
-        printf("Need Packet : %d\n\n", lastACK);
-        ACK ack(lastACK - 1, true);
-        sendto(s, ack.message, 6, 0, (struct sockaddr *)&client, sizeof(client));
-        if (end) {
-            break;
+        window_packet_mask[i] = false;
+    }
+    left = 0;
+    right = windowSize;
+
+    std::thread recv_packet(receivePacket);
+
+    while (!end || left < eofSeq)
+    {
+        if (window_packet_mask[0]) {
+            int shift;
+            for (shift = 1; window_packet_mask[shift] && shift < windowSize; shift++);
+            for (int i = 0; i < windowSize; i++) {
+                if (i < windowSize - shift) {
+                    window_packet_mask[i] = window_packet_mask[i + shift];
+                } else {
+                    window_packet_mask[i] = false;
+                }
+            }
+
+            for (int i = 0; i < shift; i++) {
+                int length = end && eofSeq == left ? eofLength : MAX_DATA_LENGTH;
+                for (int i = 0; i < length; i++) {
+                    fputc(buf[left % bufferSize + i], f);
+                }
+                right = ++left + windowSize;
+            }
+            printf("SHIFTED Left: %d Right: %d\n", left, right);
         }
     }
+
+    delete[] buf;
+    delete[] window_packet_mask;
+
+    recv_packet.join();
 
     fclose(f);
 

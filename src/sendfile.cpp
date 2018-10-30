@@ -66,7 +66,7 @@ void dealocateSocket()
 void sendPacket(Packet &packet)
 {
     printf("Sending...\n");
-    if (packet.getSOH())
+    if (packet.getDataLength() > 0)
     {
         printf("Sequence Number: %d\n", packet.getSequenceNumber());
         printf("Data: ");
@@ -123,17 +123,18 @@ void receiveACK()
 
         if (ack.checkChecksum())
         {
-            printf("Received good ACK: %d ", ack.getSequenceNumber());
-            if (ack.getSequenceNumber() >= left && ack.getSequenceNumber() <= right)
+            uint32_t seq = ack.getSequenceNumber();
+            printf("Received good ACK: %d ", seq);
+            if (seq >= left && seq < right)
             {
                 printf("ACCEPTED\n");
                 if (ack.getACK())
                 {
-                    window_ack_mask[ack.getSequenceNumber() - left] = true;
+                    window_ack_mask[seq - left] = true;
                 }
                 else
                 {
-                    window_sent_mask[ack.getSequenceNumber() - left] = false;
+                    window_sent_mask[seq - left] = false;
                 }
             }
             else
@@ -162,8 +163,7 @@ void prepareFile(char *filename)
 
 void sendEOF()
 {
-    char endMessage[10] = {};
-    Packet endPacket(endMessage);
+    Packet endPacket(NULL, 0);
     sendPacket(endPacket);
 }
 

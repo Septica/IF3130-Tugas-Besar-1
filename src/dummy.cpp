@@ -17,6 +17,8 @@ FILE *f;
 int bufferSize;
 uint32_t lastSequenceNumber;
 
+bool end = false;
+
 void createSocket()
 {
     if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -74,10 +76,7 @@ void prepareFile(char *fileName)
 void writePacket(char data[], uint32_t length)
 {
     for (uint32_t i = 0; i < length; i++)
-    {
-        printf("%c\n", data[i]);
         fputc(data[i], f);
-    }
 }
 
 int receivePacket(int lastACK)
@@ -138,6 +137,9 @@ int main(int argc, char *argv[])
         printf("Need Packet : %d\n\n", lastACK);
         ACK ack(lastACK - 1, true);
         sendto(s, ack.message, 6, 0, (struct sockaddr *)&client, sizeof(client));
+        if (end) {
+            break;
+        }
     }
 
     fclose(f);

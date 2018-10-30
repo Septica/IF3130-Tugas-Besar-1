@@ -160,7 +160,8 @@ void prepareFile(char *filename)
     printf("Success\n");
 }
 
-void sendEOF(){
+void sendEOF()
+{
     char endMessage[10] = {};
     Packet endPacket(endMessage);
     sendPacket(endPacket);

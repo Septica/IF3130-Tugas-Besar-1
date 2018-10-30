@@ -10,6 +10,8 @@
 
 int s; //This is the socket container
 struct sockaddr_in client, server; //This is client and server address
+FILE *f; //this is the file to be written
+char* buf
 
 void createSocket()
 {
@@ -49,6 +51,16 @@ void prepareFile(char *fileName)
     printf("\n");
 }
 
+void receiveMessage()
+{
+    serverAddressSize = sizeof(server);
+    recvfrom(s, buf, sizeof(buf), 0, (struct sockaddr*)&server);
+    Packet packet(buf);
+    if (packet.checkChecksum()){
+        
+    }
+}
+
 int main(int argc, char ** argv)
 {
     //Check if args count not equals to 5
@@ -66,7 +78,9 @@ int main(int argc, char ** argv)
     //Preparing output file
     prepareFile(argv[1]);
 
-    //Create window
-    
-    //Send ACK(N) if RequestNumber(N) got in
+    while(1){
+        //Create window
+
+        //Send ACK(N) if RequestNumber(N) got in
+    }
 }

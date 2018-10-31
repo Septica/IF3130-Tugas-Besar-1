@@ -104,13 +104,13 @@ int receivePacket()
             uint32_t seq = packet.getSequenceNumber();
             if (packet.getDataLength() > 0)
             {
-                //printf("Received Packet: %d\n", seq);
+                printf("Received Packet: %d\n", seq);
                 if (seq < right)
                 {
                     if (seq >= left)
                     {
                         uint32_t length = packet.getDataLength();
-                        memcpy(buf + seq % bufferSize, packet.getData(), length);
+                        memcpy(buf + seq % bufferSize * MAX_DATA_LENGTH, packet.getData(), length);
 
                         if (length < MAX_DATA_LENGTH)
                         {
@@ -190,10 +190,7 @@ int main(int argc, char *argv[])
             for (int i = 0; i < shift; i++)
             {
                 int length = end && eofSeq == left ? eofLength : MAX_DATA_LENGTH;
-                fwrite(buf + left % bufferSize + i, 1, length, f);
-                for (int i = 0; i < length; i++) {
-                    printf("%c", buf[left % bufferSize + i]);
-                }
+                fwrite(buf + (left % bufferSize + i) * MAX_DATA_LENGTH, 1, length, f);
 
                 left = left + 1;
                 right = left + windowSize;

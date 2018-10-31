@@ -177,11 +177,9 @@ int main(int argc, char *argv[])
     while (!(is_end_frame_received && left > end_frame_seq_num))
     {
         pthread_mutex_lock(&lock);
-        
+
         if (window_packet_mask[0])
         {
-            
-
             int shift;
             for (shift = 1; shift < window_size && window_packet_mask[shift]; shift++)
                 ;
@@ -212,7 +210,7 @@ int main(int argc, char *argv[])
 
     delete[] buf;
     delete[] window_packet_mask;
-    
+
     fclose(f);
 
     dealocateSocket();

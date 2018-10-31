@@ -73,10 +73,14 @@ void sendPacket(Packet &packet)
     {
         printf("Sequence Number: %d\n", packet.getSequenceNumber());
         printf("Data: \n");
-        if (packet.getDataLength() > 8) {
+        if (packet.getDataLength() > 8)
+        {
             printf("Too big to be displayed");
-        } else {
-            for (int i = 0; i < packet.getDataLength(); i++) {
+        }
+        else
+        {
+            for (int i = 0; i < packet.getDataLength(); i++)
+            {
                 printf("%c", packet.getData()[i]);
             }
         }
@@ -216,14 +220,17 @@ int main(int argc, char **argv)
 
         while (left < Packet::nextSequenceNumber)
         {
+            pthread_mutex_lock(&lock);
+
             if (window_ack_mask[0])
             {
-                pthread_mutex_lock(&lock);
+
                 int shift;
-                for (shift = 1; window_ack_mask[shift] && shift < window_size; shift++);
+                for (shift = 1; window_ack_mask[shift] && shift < window_size; shift++)
+                    ;
                 for (int i = 0; i < window_size; i++)
                 {
-                    
+
                     if (i < window_size - shift)
                     {
                         window_ack_mask[i] = window_ack_mask[i + shift];
@@ -235,17 +242,16 @@ int main(int argc, char **argv)
                         window_sent_mask[i] = false;
                         window_ack_mask[i] = false;
                     }
-                    
                 }
                 left += shift;
                 right = left + window_size;
                 printf("SHIFTED Left: %d Right %d\n", left, right);
-                pthread_mutex_unlock(&lock);
-                
+
                 if (left % buffer_size == 0)
                     break;
             }
-            
+
+            pthread_mutex_unlock(&lock);
 
             for (int i = 0; i < window_size; i++)
             {

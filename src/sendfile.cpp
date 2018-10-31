@@ -27,6 +27,8 @@ bool *window_ack_mask, *window_sent_mask;
 
 bool end;
 
+pthread_mutex_t lock;
+
 void createSocket()
 {
     if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -69,9 +71,9 @@ void sendPacket(Packet &packet)
     if (packet.getDataLength() > 0)
     {
         printf("Sequence Number: %d\n", packet.getSequenceNumber());
-        printf("Data: ");
-        for (int i = 0; i < packet.getDataLength(); i++)
-            printf("%c", packet.getData()[i]);
+        // printf("Data: ");
+        // for (int i = 0; i < packet.getDataLength(); i++)
+        //     printf("%c", packet.getData()[i]);
         printf("\n");
         printf("Checksum: %x\n", packet.getChecksum());
     }
@@ -94,14 +96,7 @@ int fillBuffer(int n)
     for (int i = 0; i < n; i++)
     {
         char data[MAX_DATA_LENGTH];
-        int length;
-
-        for (length = 0; length < MAX_DATA_LENGTH; length++)
-        {
-            data[length] = fgetc(f);
-            if (data[length] == EOF)
-                break;
-        }
+        int length = fread(data, 1, MAX_DATA_LENGTH, f);
 
         if (length == 0)
             return i;
@@ -128,6 +123,7 @@ void receiveACK()
             if (seq >= left && seq < right)
             {
                 printf("ACCEPTED\n");
+                pthread_mutex_lock(&lock);
                 if (ack.getACK())
                 {
                     window_ack_mask[seq - left] = true;
@@ -136,6 +132,7 @@ void receiveACK()
                 {
                     window_sent_mask[seq - left] = false;
                 }
+                pthread_mutex_unlock(&lock);
             }
             else
             {
@@ -152,7 +149,7 @@ void receiveACK()
 void prepareFile(char *filename)
 {
     printf("Opening '%s'...\n", filename);
-    f = fopen(filename, "r");
+    f = fopen(filename, "rb");
     if (f == NULL)
     {
         printf("Failed. Exiting.\n");
@@ -192,6 +189,7 @@ int main(int argc, char **argv)
     timespec *window_sent_time = new timespec[windowSize];
 
     end = false;
+    pthread_mutex_init(&lock, NULL);
     std::thread recv_ack(receiveACK);
 
     left = 0;
@@ -200,20 +198,24 @@ int main(int argc, char **argv)
     {
         printf("%d packet(s) in buffer\n\n", n);
 
+        pthread_mutex_lock(&lock);
         for (int i = 0; i < windowSize; i++)
         {
             window_ack_mask[i] = false;
             window_sent_mask[i] = false;
         }
+        pthread_mutex_unlock(&lock);
 
         while (left < Packet::nextSequenceNumber)
         {
             if (window_ack_mask[0])
             {
+                pthread_mutex_lock(&lock);
                 int shift;
                 for (shift = 1; window_ack_mask[shift] && shift < windowSize; shift++);
                 for (int i = 0; i < windowSize; i++)
                 {
+                    
                     if (i < windowSize - shift)
                     {
                         window_ack_mask[i] = window_ack_mask[i + shift];
@@ -225,14 +227,17 @@ int main(int argc, char **argv)
                         window_sent_mask[i] = false;
                         window_ack_mask[i] = false;
                     }
+                    
                 }
                 left += shift;
                 right = left + windowSize;
                 printf("SHIFTED Left: %d Right %d\n", left, right);
-
+                pthread_mutex_unlock(&lock);
+                
                 if (left % bufferSize == 0)
                     break;
             }
+            
 
             for (int i = 0; i < windowSize; i++)
             {
@@ -241,6 +246,7 @@ int main(int argc, char **argv)
 
                 timespec now;
                 clock_gettime(CLOCK_MONOTONIC, &now);
+                pthread_mutex_lock(&lock);
                 if (!window_sent_mask[i] ||
                     !window_ack_mask[i] && now.tv_sec - window_sent_time[i].tv_sec > 2)
                 {
@@ -250,6 +256,7 @@ int main(int argc, char **argv)
                     window_sent_mask[i] = true;
                     clock_gettime(CLOCK_MONOTONIC, &window_sent_time[i]);
                 }
+                pthread_mutex_unlock(&lock);
             }
         }
         printf("\n");
@@ -263,5 +270,6 @@ int main(int argc, char **argv)
 
     end = true;
     recv_ack.join();
+    pthread_mutex_destroy(&lock);
     delete[] buf;
 }

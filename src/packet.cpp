@@ -2,7 +2,7 @@
 #include <cstring>
 #include <stdio.h>
 
-const uint32_t MAX_DATA_LENGTH = 3;
+const uint32_t MAX_DATA_LENGTH = 1024;
 const int MAX_PACKET_SIZE = MAX_DATA_LENGTH + 10;
 
 class Packet {

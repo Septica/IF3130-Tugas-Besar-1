@@ -95,12 +95,11 @@ int fillBuffer(int n)
     printf("Filling buffer...\n");
     for (int i = 0; i < n; i++)
     {
+        if (feof(f))
+            return i;
         char data[MAX_DATA_LENGTH];
         int length = fread(data, 1, MAX_DATA_LENGTH, f);
-
-        if (length == 0)
-            return i;
-
+        printf("Length: %d\n", length);
         Packet packet(data, length);
         memcpy(buf + i * MAX_PACKET_SIZE, packet.message, packet.getDataLength() + 10);
     }

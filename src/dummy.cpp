@@ -166,7 +166,7 @@ int main(int argc, char *argv[])
     pthread_mutex_init(&lock, NULL);
     std::thread recv_packet(receivePacket);
 
-    while (!end || left < eofSeq)
+    while (!end || left <= eofSeq)
     {
         pthread_mutex_lock(&lock);
         if (window_packet_mask[0])

@@ -13,16 +13,17 @@
 #include "ack.cpp"
 
 uint32_t Packet::nextSequenceNumber = 0;
+time_t timeout = 3;
 
 int s;
 struct sockaddr_in server;
-char *buf;
+
+typedef char packet[MAX_PACKET_SIZE];
+packet *buf;
+
 FILE *f;
 
-time_t timeout = 3;
-
 uint32_t left, right;
-
 bool *window_ack_mask, *window_sent_mask;
 
 bool end;
@@ -73,7 +74,7 @@ void sendPacket(Packet &packet)
         printf("Sequence Number: %d\n", packet.getSequenceNumber());
         printf("Data: \n");
         if (packet.getDataLength() > 8) {
-            printf("Too big");
+            printf("Too big to be displayed");
         } else {
             for (int i = 0; i < packet.getDataLength(); i++) {
                 printf("%c", packet.getData()[i]);
@@ -106,24 +107,26 @@ int fillBuffer(int n)
         int length = fread(data, 1, MAX_DATA_LENGTH, f);
         printf("Length: %d\n", length);
         Packet packet(data, length);
-        memcpy(buf + i * MAX_PACKET_SIZE, packet.message, packet.getDataLength() + 10);
+        memcpy(buf + i, packet.message, packet.getDataLength() + 10);
     }
     return n;
 }
 
 void receiveACK()
 {
-    char tmp[6];
     while (!end)
     {
+        char tmp[6];
         uint32_t server_address_size = sizeof(server);
-        recvfrom(s, tmp, sizeof(tmp), 0, (struct sockaddr *)&server, &server_address_size);
+        if (recvfrom(s, tmp, sizeof(tmp), 0, (struct sockaddr *)&server, &server_address_size) < 0)
+            continue;
+
         ACK ack(tmp);
 
         if (ack.checkChecksum())
         {
             uint32_t seq = ack.getSequenceNumber();
-            printf("Received good ACK: %d ", seq);
+            printf("Received ACK: %d ", seq);
             if (seq >= left && seq < right)
             {
                 printf("ACCEPTED\n");
@@ -145,7 +148,7 @@ void receiveACK()
         }
         else
         {
-            printf("ERROR CHECKSUM\n");
+            printf("ACK Error\n");
         }
     }
 }
@@ -179,31 +182,32 @@ int main(int argc, char **argv)
     createSocket();
     bindClient();
     setupServer(inet_addr(argv[4]), htons(atoi(argv[5])));
+
     prepareFile(argv[1]);
 
     printf("\n");
 
-    int bufferSize = atoi(argv[3]);
-    buf = new char[bufferSize * MAX_PACKET_SIZE];
+    int buffer_size = atoi(argv[3]);
+    buf = new packet[buffer_size];
 
-    uint32_t windowSize = atoi(argv[2]);
+    int window_size = atoi(argv[2]);
+    window_ack_mask = new bool[window_size];
+    window_sent_mask = new bool[window_size];
+    timespec *window_sent_time = new timespec[window_size];
 
-    window_ack_mask = new bool[windowSize];
-    window_sent_mask = new bool[windowSize];
-    timespec *window_sent_time = new timespec[windowSize];
-
+    left = 0;
+    right = window_size;
     end = false;
+
     pthread_mutex_init(&lock, NULL);
     std::thread recv_ack(receiveACK);
 
-    left = 0;
-    right = left + windowSize;
-    while (int n = fillBuffer(bufferSize))
+    while (int n = fillBuffer(buffer_size))
     {
         printf("%d packet(s) in buffer\n\n", n);
 
         pthread_mutex_lock(&lock);
-        for (int i = 0; i < windowSize; i++)
+        for (int i = 0; i < window_size; i++)
         {
             window_ack_mask[i] = false;
             window_sent_mask[i] = false;
@@ -216,11 +220,11 @@ int main(int argc, char **argv)
             {
                 pthread_mutex_lock(&lock);
                 int shift;
-                for (shift = 1; window_ack_mask[shift] && shift < windowSize; shift++);
-                for (int i = 0; i < windowSize; i++)
+                for (shift = 1; window_ack_mask[shift] && shift < window_size; shift++);
+                for (int i = 0; i < window_size; i++)
                 {
                     
-                    if (i < windowSize - shift)
+                    if (i < window_size - shift)
                     {
                         window_ack_mask[i] = window_ack_mask[i + shift];
                         window_sent_time[i] = window_sent_time[i + shift];
@@ -234,46 +238,52 @@ int main(int argc, char **argv)
                     
                 }
                 left += shift;
-                right = left + windowSize;
+                right = left + window_size;
                 printf("SHIFTED Left: %d Right %d\n", left, right);
                 pthread_mutex_unlock(&lock);
                 
-                if (left % bufferSize == 0)
+                if (left % buffer_size == 0)
                     break;
             }
             
 
-            for (int i = 0; i < windowSize; i++)
+            for (int i = 0; i < window_size; i++)
             {
-                if (i + left % bufferSize >= n)
+                if (left % buffer_size + i >= n)
                     break;
 
                 timespec now;
                 clock_gettime(CLOCK_MONOTONIC, &now);
+
                 pthread_mutex_lock(&lock);
-                if (!window_sent_mask[i] ||
-                    !window_ack_mask[i] && now.tv_sec - window_sent_time[i].tv_sec > 2)
+
+                if (!window_sent_mask[i] || !window_ack_mask[i] && now.tv_sec - window_sent_time[i].tv_sec > 2)
                 {
-                    Packet tmp(buf + (i + left % bufferSize) * MAX_PACKET_SIZE);
+                    Packet tmp(buf[left % buffer_size + i]);
                     sendPacket(tmp);
 
                     window_sent_mask[i] = true;
                     clock_gettime(CLOCK_MONOTONIC, &window_sent_time[i]);
                 }
+
                 pthread_mutex_unlock(&lock);
             }
         }
         printf("\n");
     }
 
+    end = true;
+    sendEOF();
+
+    recv_ack.join();
+    pthread_mutex_destroy(&lock);
+
+    delete[] buf;
     delete[] window_ack_mask;
     delete[] window_sent_time;
     delete[] window_sent_mask;
 
-    sendEOF();
+    fclose(f);
 
-    end = true;
-    recv_ack.join();
-    pthread_mutex_destroy(&lock);
-    delete[] buf;
+    dealocateSocket();
 }

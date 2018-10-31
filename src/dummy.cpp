@@ -10,19 +10,21 @@
 #include "packet.cpp"
 
 int s;
-uint32_t namelen, client_address_size;
 struct sockaddr_in client, server;
-char *buf;
+
+typedef char frame_data[MAX_DATA_LENGTH];
+int buffer_size;
+frame_data *buf;
+
 FILE *f;
 
-int bufferSize;
 uint32_t left, right;
-
 bool *window_packet_mask;
 
-uint32_t eofSeq;
-uint32_t eofLength;
-bool end = false;
+uint32_t end_frame_seq_num;
+uint32_t end_frame_data_len;
+bool is_end_frame_received;
+
 pthread_mutex_t lock;
 
 void createSocket()
@@ -52,7 +54,7 @@ void bindServer()
 
 void findOutPort()
 {
-    namelen = sizeof(server);
+    uint32_t namelen = sizeof(server);
     if (getsockname(s, (struct sockaddr *)&server, &namelen) < 0)
     {
         perror("getsockname()");
@@ -76,22 +78,21 @@ void prepareFile(char *fileName)
         exit(0);
     }
     printf("Success\n");
-    printf("\n");
 }
 
-void sendACK(int sequenceNumber, bool isAcknowledged)
+void sendACK(uint32_t sequence_number, bool is_acknowledged)
 {
-    ACK ack(sequenceNumber, true);
+    ACK ack(sequence_number, is_acknowledged);
     sendto(s, ack.message, sizeof(ack.message), 0, (struct sockaddr *)&client, sizeof(client));
-    //printf("Send ACK: %d\n", sequenceNumber);
+    printf("Send %s: %d\n", is_acknowledged ? "ACK" : "NAK", sequence_number);
 }
 
 int receivePacket()
 {
-    while (!end)
+    while (!is_end_frame_received)
     {
         char tmp[MAX_PACKET_SIZE];
-        client_address_size = sizeof(client);
+        uint32_t client_address_size = sizeof(client);
         if (recvfrom(s, tmp, sizeof(tmp), 0, (struct sockaddr *)&client, &client_address_size) < 0)
         {
             perror("recvfrom()");
@@ -99,9 +100,10 @@ int receivePacket()
         }
 
         Packet packet(tmp);
+
+        uint32_t seq = packet.getSequenceNumber();
         if (packet.checkChecksum())
         {
-            uint32_t seq = packet.getSequenceNumber();
             if (packet.getDataLength() > 0)
             {
                 printf("Received Packet: %d\n", seq);
@@ -110,13 +112,13 @@ int receivePacket()
                     if (seq >= left)
                     {
                         uint32_t length = packet.getDataLength();
-                        memcpy(buf + seq % bufferSize * MAX_DATA_LENGTH, packet.getData(), length);
+                        memcpy(buf + seq % buffer_size, packet.getData(), length);
 
                         if (length < MAX_DATA_LENGTH)
                         {
-                            eofSeq = seq;
-                            eofLength = length;
-                            end = true;
+                            end_frame_seq_num = seq;
+                            end_frame_data_len = length;
+                            is_end_frame_received = true;
                         }
 
                         pthread_mutex_lock(&lock);
@@ -129,10 +131,15 @@ int receivePacket()
             else
             {
                 printf("EOF\n");
-                eofSeq = seq - 1;
-                eofLength = MAX_DATA_LENGTH;
-                end = true;
+                end_frame_seq_num = seq - 1;
+                end_frame_data_len = MAX_DATA_LENGTH;
+                is_end_frame_received = true;
             }
+        }
+        else
+        {
+            printf("Received bad frame\n");
+            sendACK(seq, false);
         }
     }
 }
@@ -152,61 +159,60 @@ int main(int argc, char *argv[])
 
     prepareFile(argv[1]);
 
-    bufferSize = atoi(argv[3]);
-    buf = new char[bufferSize * MAX_DATA_LENGTH];
+    printf("\n");
 
-    uint32_t windowSize = atoi(argv[2]);
-    window_packet_mask = new bool[windowSize];
-    for (int i = 0; i < windowSize; i++)
-    {
-        window_packet_mask[i] = false;
-    }
+    buffer_size = atoi(argv[3]);
+    buf = new frame_data[buffer_size];
+
+    int window_size = atoi(argv[2]);
+    window_packet_mask = new bool[window_size]();
+
     left = 0;
-    right = windowSize;
+    right = window_size;
+    is_end_frame_received = false;
 
     pthread_mutex_init(&lock, NULL);
     std::thread recv_packet(receivePacket);
 
-    while (!end || left <= eofSeq)
+    while (!(is_end_frame_received && left > end_frame_seq_num))
     {
         pthread_mutex_lock(&lock);
+        
         if (window_packet_mask[0])
         {
+            
+
             int shift;
-            for (shift = 1; window_packet_mask[shift] && shift < windowSize; shift++);
-            for (int i = 0; i < windowSize; i++)
+            for (shift = 1; shift < window_size && window_packet_mask[shift]; shift++)
+                ;
+            for (int i = 0; i < window_size - shift; i++)
             {
-                if (i < windowSize - shift)
-                {
-                    window_packet_mask[i] = window_packet_mask[i + shift];
-                }
-                else
-                {
-                    window_packet_mask[i] = false;
-                }
-                
+                window_packet_mask[i] = window_packet_mask[i + shift];
+            }
+            for (int i = window_size - shift; i < window_size; i++)
+            {
+                window_packet_mask[i] = false;
             }
 
             for (int i = 0; i < shift; i++)
             {
-                int length = end && eofSeq == left ? eofLength : MAX_DATA_LENGTH;
-                fwrite(buf + (left % bufferSize + i) * MAX_DATA_LENGTH, 1, length, f);
+                fwrite(buf + left % buffer_size, 1, is_end_frame_received && left == end_frame_seq_num ? end_frame_data_len : MAX_DATA_LENGTH, f);
 
                 left = left + 1;
-                right = left + windowSize;
+                right = left + window_size;
             }
             printf("SHIFTED Left: %d Right: %d\n", left, right);
         }
+
         pthread_mutex_unlock(&lock);
     }
 
-    delete[] buf;
-    delete[] window_packet_mask;
-
     recv_packet.join();
-
     pthread_mutex_destroy(&lock);
 
+    delete[] buf;
+    delete[] window_packet_mask;
+    
     fclose(f);
 
     dealocateSocket();

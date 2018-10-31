@@ -4,30 +4,31 @@
 #include <netinet/in.h>
 #include <unistd.h>
 #include <arpa/inet.h>
-#include "packet.cpp"
+#include <thread>
+
 #include "ack.cpp"
-#define H_ACK 1
-#define H_NAK 0
-#define H_PACK 1
-#define H_EOF 0
-#define MAX_BUFFER_SIZE 11000
+#include "packet.cpp"
 
-const int MAX_PACKET_SIZE = MAX_DATA_LENGTH + 10;
-
-uint32_t nextSequenceNumber = 0;
-
-bool done = false;
 int s;
-uint32_t namelen, client_address_size;
-unsigned short port;
 struct sockaddr_in client, server;
-char *buf;
-int windowsize, buffersize, maxPacketsInBuffer,idxbuf=0;
+
+typedef char frame_data[MAX_DATA_LENGTH];
+int buffer_size;
+frame_data *buf;
 
 FILE *f;
 
-void createSocket(){
-    
+uint32_t left, right;
+bool *window_packet_mask;
+
+uint32_t end_frame_seq_num;
+uint32_t end_frame_data_len;
+bool is_end_frame_received;
+
+pthread_mutex_t lock;
+
+void createSocket()
+{
     if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     {
         perror("socket()");
@@ -35,111 +36,184 @@ void createSocket(){
     }
 }
 
-void setupServer(unsigned short port){
-    
-    server.sin_family = AF_INET;         /* Server is in Internet Domain */
-    server.sin_port = port;              /* Use this port                */
-    server.sin_addr.s_addr = INADDR_ANY; /* Server's Internet Address    */
+void setupServer(unsigned short port)
+{
+    server.sin_family = AF_INET;
+    server.sin_port = port;
+    server.sin_addr.s_addr = INADDR_ANY;
 }
 
-void bindServer(){
-    
+void bindServer()
+{
     if (bind(s, (struct sockaddr *)&server, sizeof(server)) < 0)
     {
         perror("bind()");
         exit(2);
     }
-    
 }
 
-void dealocateSocket(){
+void findOutPort()
+{
+    uint32_t namelen = sizeof(server);
+    if (getsockname(s, (struct sockaddr *)&server, &namelen) < 0)
+    {
+        perror("getsockname()");
+        exit(3);
+    }
+    printf("Port assigned is %d\n", ntohs(server.sin_port));
+}
+
+void dealocateSocket()
+{
     close(s);
 }
 
-
-void sendACK(ACK& ack)
+void prepareFile(char *fileName)
 {
-    if (sendto(s, ack.message, sizeof(ack), 0, (struct sockaddr *)&client, sizeof(client)) < 0)
+    printf("Opening '%s'...\n", fileName);
+    f = fopen(fileName, "wb");
+    if (f == NULL)
     {
-        perror("sendto()");
-        exit(2);
+        printf("Failed. Exiting.\n");
+        exit(0);
     }
+    printf("Success\n");
 }
 
-void sendWrongACK(){
-    ACK desiredACK(nextSequenceNumber,true);
-    sendACK(desiredACK);
+void sendACK(uint32_t sequence_number, bool is_acknowledged)
+{
+    ACK ack(sequence_number, is_acknowledged);
+    sendto(s, ack.message, sizeof(ack.message), 0, (struct sockaddr *)&client, sizeof(client));
+    printf("Send %s: %d\n", is_acknowledged ? "ACK" : "NAK", sequence_number);
 }
 
-void processMessage(){
-    printf("masuk processmessage\n");
-
-    client_address_size = sizeof(client);
-    buf = new char[1034];
-    
-
-    if (recvfrom(s,buf, 1034, 0, (struct sockaddr *)&client, &client_address_size) < 0)
+int receivePacket()
+{
+    while (!is_end_frame_received)
     {
-        perror("recvfrom()");
-        exit(4);
-    }
+        char tmp[MAX_PACKET_SIZE];
+        uint32_t client_address_size = sizeof(client);
+        if (recvfrom(s, tmp, sizeof(tmp), 0, (struct sockaddr *)&client, &client_address_size) < 0)
+        {
+            perror("recvfrom()");
+            exit(4);
+        }
 
-    Packet currPacket(buf);
-    
-    if(currPacket.getSequenceNumber() != nextSequenceNumber){
-        sendWrongACK();
-        return;
-    }
-    printf("getdata :\n");
-    currPacket.printMessage();
-    
+        Packet packet(tmp);
 
-    printf("tengah\n");
-    char* test = currPacket.getData();
-    printf("%d\n", currPacket.getDataLength());
-    for (int i = 0; i < currPacket.getDataLength(); i++) {
-        printf("%c\n", test[i]);
+        uint32_t seq = packet.getSequenceNumber();
+        if (packet.checkChecksum())
+        {
+            if (packet.getDataLength() > 0)
+            {
+                printf("Received Packet: %d\n", seq);
+                if (seq < right)
+                {
+                    if (seq >= left)
+                    {
+                        uint32_t length = packet.getDataLength();
+                        memcpy(buf + seq % buffer_size, packet.getData(), length);
+
+                        if (length < MAX_DATA_LENGTH)
+                        {
+                            end_frame_seq_num = seq;
+                            end_frame_data_len = length;
+                            is_end_frame_received = true;
+                        }
+
+                        pthread_mutex_lock(&lock);
+                        window_packet_mask[seq - left] = true;
+                        pthread_mutex_unlock(&lock);
+                    }
+                    sendACK(seq, true);
+                }
+            }
+            else
+            {
+                printf("EOF\n");
+                end_frame_seq_num = seq - 1;
+                end_frame_data_len = MAX_DATA_LENGTH;
+                is_end_frame_received = true;
+            }
+        }
+        else
+        {
+            printf("Received bad frame\n");
+            sendACK(seq, false);
+        }
     }
-    // printf("sebelum\n");
-    // memcpy(buffer,currPacket.getData(),currPacket.getDataLength());
-    // printf("tengah\n");
-    // buffer[currPacket.getDataLength()]='\0';
-    // printf("buffer : %s\n",buffer);
-    //fprintf(f,buffer);
-    printf("asdfasdfasdfasdfasdfasdfasdfasd\n");
-    if(currPacket.getSOH()==H_EOF){
-        done = true;
-    }
-    
 }
 
 int main(int argc, char *argv[])
 {
-
     if (argc != 5)
     {
         printf("Usage: %s <filename> <windowsize> <buffersize> <port> \n", argv[0]);
         exit(1);
     }
-    windowsize = atoi(argv[2]);
-    buffersize = atoi(argv[3]);
-    maxPacketsInBuffer = buffersize/MAX_PACKET_SIZE;
-    buf = new char[maxPacketsInBuffer*MAX_PACKET_SIZE];
 
     createSocket();
     setupServer(htons(atoi(argv[4])));
     bindServer();
+    findOutPort();
 
-    f = fopen(argv[1],"w");
-    if (f==NULL){
-        printf("Failed to write file. Exit\n");
-        exit(0);
-    }
+    prepareFile(argv[1]);
 
-    while(!done){
+    printf("\n");
+
+    buffer_size = atoi(argv[3]);
+    buf = new frame_data[buffer_size];
+
+    int window_size = atoi(argv[2]);
+    window_packet_mask = new bool[window_size]();
+
+    left = 0;
+    right = window_size;
+    is_end_frame_received = false;
+
+    pthread_mutex_init(&lock, NULL);
+    std::thread recv_packet(receivePacket);
+
+    while (!(is_end_frame_received && left > end_frame_seq_num))
+    {
+        pthread_mutex_lock(&lock);
         
-        processMessage();
+        if (window_packet_mask[0])
+        {
+            
+
+            int shift;
+            for (shift = 1; shift < window_size && window_packet_mask[shift]; shift++)
+                ;
+            for (int i = 0; i < window_size - shift; i++)
+            {
+                window_packet_mask[i] = window_packet_mask[i + shift];
+            }
+            for (int i = window_size - shift; i < window_size; i++)
+            {
+                window_packet_mask[i] = false;
+            }
+
+            for (int i = 0; i < shift; i++)
+            {
+                fwrite(buf + left % buffer_size, 1, is_end_frame_received && left == end_frame_seq_num ? end_frame_data_len : MAX_DATA_LENGTH, f);
+
+                left = left + 1;
+                right = left + window_size;
+            }
+            printf("SHIFTED Left: %d Right: %d\n", left, right);
+        }
+
+        pthread_mutex_unlock(&lock);
     }
+
+    recv_packet.join();
+    pthread_mutex_destroy(&lock);
+
+    delete[] buf;
+    delete[] window_packet_mask;
     
-    
+    fclose(f);
+
+    dealocateSocket();
 }

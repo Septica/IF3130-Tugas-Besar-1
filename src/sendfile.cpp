@@ -71,9 +71,9 @@ void sendPacket(Packet &packet)
     if (packet.getDataLength() > 0)
     {
         printf("Sequence Number: %d\n", packet.getSequenceNumber());
-        // printf("Data: ");
-        // for (int i = 0; i < packet.getDataLength(); i++)
-        //     printf("%c", packet.getData()[i]);
+        printf("Data: \n");
+        for (int i = 0; i < packet.getDataLength(); i++)
+            printf("%c", packet.getData()[i]);
         printf("\n");
         printf("Checksum: %x\n", packet.getChecksum());
     }

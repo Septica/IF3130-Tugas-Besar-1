@@ -83,7 +83,7 @@ void sendACK(int sequenceNumber, bool isAcknowledged)
 {
     ACK ack(sequenceNumber, true);
     sendto(s, ack.message, sizeof(ack.message), 0, (struct sockaddr *)&client, sizeof(client));
-    printf("Send ACK: %d\n", sequenceNumber);
+    //printf("Send ACK: %d\n", sequenceNumber);
 }
 
 int receivePacket()
@@ -104,13 +104,14 @@ int receivePacket()
             uint32_t seq = packet.getSequenceNumber();
             if (packet.getDataLength() > 0)
             {
-                printf("Received Packet: %d\n", seq);
+                //printf("Received Packet: %d\n", seq);
                 if (seq < right)
                 {
                     if (seq >= left)
                     {
                         uint32_t length = packet.getDataLength();
                         memcpy(buf + seq % bufferSize, packet.getData(), length);
+
                         if (length < MAX_DATA_LENGTH)
                         {
                             eofSeq = seq;
@@ -190,10 +191,12 @@ int main(int argc, char *argv[])
             {
                 int length = end && eofSeq == left ? eofLength : MAX_DATA_LENGTH;
                 fwrite(buf + left % bufferSize + i, 1, length, f);
-                // for (int i = 0; i < length; i++) {
-                //     fputc(buf[left % bufferSize + i], f);
-                // }
-                right = ++left + windowSize;
+                for (int i = 0; i < length; i++) {
+                    printf("%c", buf[left % bufferSize + i]);
+                }
+
+                left = left + 1;
+                right = left + windowSize;
             }
             printf("SHIFTED Left: %d Right: %d\n", left, right);
         }

@@ -211,6 +211,7 @@ int main(int argc, char **argv)
         printf("%d packet(s) in buffer\n\n", n);
 
         pthread_mutex_lock(&lock);
+        printf("hai felix!");
         for (int i = 0; i < window_size; i++)
         {
             window_ack_mask[i] = false;
@@ -247,8 +248,10 @@ int main(int argc, char **argv)
                 right = left + window_size;
                 printf("SHIFTED Left: %d Right %d\n", left, right);
 
-                if (left % buffer_size == 0)
+                if (left % buffer_size == 0){
+                    pthread_mutex_unlock(&lock);
                     break;
+                }
             }
 
             pthread_mutex_unlock(&lock);

@@ -15,22 +15,23 @@
 uint32_t Packet::nextSequenceNumber = 0;
 time_t timeout = 3;
 
-int s;
-struct sockaddr_in server;
+int s; //Socket connection number
+struct sockaddr_in server; //Server Aaddress type
 
-typedef char packet[MAX_PACKET_SIZE];
-packet *buf;
+typedef char packet[MAX_PACKET_SIZE]; //Pcacket to be sent
+packet *buf; //Buffer memory
 
-FILE *f;
+FILE *f; //File to be sent
 
-uint32_t left, right;
-bool *window_ack_mask, *window_sent_mask;
+uint32_t left, right; 
+bool *window_ack_mask, *window_sent_mask; //Window boolean true if sent, false if not sent
 
 bool end;
 
 pthread_mutex_t lock;
 
 void createSocket()
+/* AF_INET as domain, SOCK_DGRAM as socket type for UDP connection */
 {
     if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
     {

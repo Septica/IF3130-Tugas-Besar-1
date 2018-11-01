@@ -196,8 +196,8 @@ int main(int argc, char **argv)
     buf = new packet[buffer_size];
 
     int window_size = atoi(argv[2]);
-    window_ack_mask = new bool[window_size];
-    window_sent_mask = new bool[window_size];
+    window_ack_mask = new bool[window_size]();
+    window_sent_mask = new bool[window_size]();
     timespec *window_sent_time = new timespec[window_size];
 
     left = 0;
@@ -210,15 +210,6 @@ int main(int argc, char **argv)
     while (int n = fillBuffer(buffer_size))
     {
         printf("%d packet(s) in buffer\n\n", n);
-
-        pthread_mutex_lock(&lock);
-        printf("hai felix!");
-        for (int i = 0; i < window_size; i++)
-        {
-            window_ack_mask[i] = false;
-            window_sent_mask[i] = false;
-        }
-        pthread_mutex_unlock(&lock);
 
         while (left < Packet::nextSequenceNumber)
         {

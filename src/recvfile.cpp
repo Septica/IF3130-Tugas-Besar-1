@@ -21,8 +21,8 @@ FILE *f;
 uint32_t left, right;
 bool *window_packet_mask;
 
-uint32_t end_frame_seq_num;
-uint32_t end_frame_data_len;
+uint32_t last_frame_received;
+uint32_t last_frame_data_len;
 bool is_end_frame_received;
 
 pthread_mutex_t lock;
@@ -34,6 +34,12 @@ void createSocket()
         perror("socket()");
         exit(1);
     }
+
+    struct timeval timeout;
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
 }
 
 void setupServer(unsigned short port)
@@ -95,8 +101,11 @@ int receivePacket()
         uint32_t client_address_size = sizeof(client);
         if (recvfrom(s, tmp, sizeof(tmp), 0, (struct sockaddr *)&client, &client_address_size) < 0)
         {
-            perror("recvfrom()");
-            exit(4);
+            if (left > last_frame_received)
+            {
+                is_end_frame_received = true;
+            }
+            continue;
         }
 
         Packet packet(tmp);
@@ -114,11 +123,10 @@ int receivePacket()
                         uint32_t length = packet.getDataLength();
                         memcpy(buf + seq % buffer_size, packet.getData(), length);
 
-                        if (length < MAX_DATA_LENGTH)
+                        if (seq > last_frame_received)
                         {
-                            end_frame_seq_num = seq;
-                            end_frame_data_len = length;
-                            is_end_frame_received = true;
+                            last_frame_received = seq;
+                            last_frame_data_len = length;
                         }
 
                         pthread_mutex_lock(&lock);
@@ -131,8 +139,6 @@ int receivePacket()
             else
             {
                 printf("EOF\n");
-                end_frame_seq_num = seq - 1;
-                end_frame_data_len = MAX_DATA_LENGTH;
                 is_end_frame_received = true;
             }
         }
@@ -174,7 +180,7 @@ int main(int argc, char *argv[])
     pthread_mutex_init(&lock, NULL);
     std::thread recv_packet(receivePacket);
 
-    while (!(is_end_frame_received && left > end_frame_seq_num))
+    while (!(is_end_frame_received && left > last_frame_received))
     {
         pthread_mutex_lock(&lock);
 
@@ -194,7 +200,7 @@ int main(int argc, char *argv[])
 
             for (int i = 0; i < shift; i++)
             {
-                fwrite(buf + left % buffer_size, 1, is_end_frame_received && left == end_frame_seq_num ? end_frame_data_len : MAX_DATA_LENGTH, f);
+                fwrite(buf + left % buffer_size, 1, is_end_frame_received && left == last_frame_received ? last_frame_data_len : MAX_DATA_LENGTH, f);
 
                 left = left + 1;
                 right = left + window_size;

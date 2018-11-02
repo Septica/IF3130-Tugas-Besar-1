@@ -15,16 +15,16 @@
 uint32_t Packet::nextSequenceNumber = 0;
 time_t timeout = 3;
 
-int s; //Socket connection number
-struct sockaddr_in server; //Server Aaddress type
+int s;                     //Socket connection number
+struct sockaddr_in server; //Server Address type
 
-typedef char packet[MAX_PACKET_SIZE]; //Pcacket to be sent
-packet *buf; //Buffer memory
+typedef char packet[MAX_PACKET_SIZE]; //Packet to be sent
+packet *buf;                          //Buffer memory
 
 FILE *f; //File to be sent
 
-uint32_t left, right; 
-bool *window_ack_mask, *window_sent_mask; //Window boolean true if sent, false if not sent
+uint32_t left, right;
+bool *window_ack_mask, *window_sent_mask; //Window boolean true if sent/received, false if not yet sent/received
 
 bool end;
 
@@ -240,7 +240,8 @@ int main(int argc, char **argv)
                 right = left + window_size;
                 printf("SHIFTED Left: %d Right %d\n", left, right);
 
-                if (left % buffer_size == 0){
+                if (left % buffer_size == 0)
+                {
                     pthread_mutex_unlock(&lock);
                     break;
                 }

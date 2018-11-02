@@ -17,12 +17,13 @@ P.S. filename pada SendFile adalah nama file yang akan dikirim misalkan "send.tx
     - Thread kedua (parent thread) menghitung banyaknya slide yang dilakukan pada window. Banyaknya dihitung dari jumlah packet yang sudah di-acknowledge dari kiri window ke kanan. 
     - Setelah itu, main thread akan mengirim packet ke host yang dituju. Packet akan dikirim jika packet belum pernah dikirim atau sudah timeout tetapi belum mendapatkan ACK.
     - Setelah dikirim, packet akan ditandai, dan menambahkan timeout ke packet tersebut.
-    - Setelah semua packet dikirim akan dilakukan pengiriman packet EOF yang memiliki dataLength 0.
+    - Sendfile akan langsung berhenti setelah menerima semua ack atau tidak mendapat respon balik dari server dan telah mengirim semua paket.
 
 2. RecvFile
     - Menginisialisasi socket sesuai dengan parameter yang dimasukkan
     - Terdapat 2 thread, child thread akan melakukan penerimaan packet, packet akan dicek checksumnya, panjang datanya, lalu jika nomor packet yang diterima di bawah dari batas maksimum nomor window, maka ACK akan dikirim. Jika ada di dalam window akan dituliskan ke buffer dan ditandai.
     - Sedangkan parent thread melakukan penulisan ke file dan slding pada window. Jika terdapat shift yang dilakukan, akan file yang diterima akan ditulis.
+    - Recvfile akan langsung berhenti setelah memproses packet terakhir. Packet terakhir didefinisikan sebagai packet yang memiliki data length yang lebih kecil dari length maximum, atau packet terakhir yang diterima setelah timeout.
 
 # Pembagian Tugas
 1. Felix Septianus - 13516041: SendFile

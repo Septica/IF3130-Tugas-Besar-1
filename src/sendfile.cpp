@@ -41,7 +41,7 @@ void createSocket()
     }
 
     struct timeval timeout;
-    timeout.tv_sec = 30;
+    timeout.tv_sec = 20;
     timeout.tv_usec = 0;
 
     setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));

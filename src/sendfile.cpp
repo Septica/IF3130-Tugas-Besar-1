@@ -15,18 +15,18 @@
 uint32_t Packet::nextSequenceNumber = 0;
 time_t timeout = 3;
 
-int s; //Socket connection number
-struct sockaddr_in server; //Server Aaddress type
+int s;                     //Socket connection number
+struct sockaddr_in server; //Server Address type
 
-typedef char packet[MAX_PACKET_SIZE]; //Pcacket to be sent
-packet *buf; //Buffer memory
+typedef char packet[MAX_PACKET_SIZE]; //Packet to be sent
+packet *buf;                          //Buffer memory
 
 FILE *f; //File to be sent
 
-uint32_t left, right; 
-bool *window_ack_mask, *window_sent_mask; //Window boolean true if sent, false if not sent
+uint32_t left, right;
+bool *window_ack_mask, *window_sent_mask; //Window boolean true if sent/received, false if not yet sent/received
 
-bool end;
+bool lastPacket, noResponse;
 
 pthread_mutex_t lock;
 
@@ -38,6 +38,12 @@ void createSocket()
         perror("socket()");
         exit(1);
     }
+
+    struct timeval timeout;
+    timeout.tv_sec = 30;
+    timeout.tv_usec = 0;
+
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
 }
 
 void bindClient()
@@ -70,28 +76,21 @@ void dealocateSocket()
 void sendPacket(Packet &packet)
 {
     printf("Sending...\n");
-    if (packet.getDataLength() > 0)
+    printf("Sequence Number: %d\n", packet.getSequenceNumber());
+    printf("Data: \n");
+    if (packet.getDataLength() > 8)
     {
-        printf("Sequence Number: %d\n", packet.getSequenceNumber());
-        printf("Data: \n");
-        if (packet.getDataLength() > 8)
-        {
-            printf("Too big to be displayed");
-        }
-        else
-        {
-            for (int i = 0; i < packet.getDataLength(); i++)
-            {
-                printf("%c", packet.getData()[i]);
-            }
-        }
-        printf("\n");
-        printf("Checksum: %x\n", packet.getChecksum());
+        printf("Too big to be displayed");
     }
     else
     {
-        printf("EOF");
+        for (int i = 0; i < packet.getDataLength(); i++)
+        {
+            printf("%c", packet.getData()[i]);
+        }
     }
+    printf("\n");
+    printf("Checksum: %x\n", packet.getChecksum());
     printf("\n");
 
     if (sendto(s, packet.message, packet.getDataLength() + 10, 0, (struct sockaddr *)&server, sizeof(server)) < 0)
@@ -113,18 +112,24 @@ int fillBuffer(int n)
         printf("Length: %d\n", length);
         Packet packet(data, length);
         memcpy(buf + i, packet.message, packet.getDataLength() + 10);
+
+        if (length < MAX_DATA_LENGTH) {
+            lastPacket = true;
+        } 
     }
     return n;
 }
 
 void receiveACK()
 {
-    while (!end)
+    while (!(noResponse && lastPacket))
     {
         char tmp[6];
         uint32_t server_address_size = sizeof(server);
-        if (recvfrom(s, tmp, sizeof(tmp), 0, (struct sockaddr *)&server, &server_address_size) < 0)
+        if (recvfrom(s, tmp, sizeof(tmp), 0, (struct sockaddr *)&server, &server_address_size) < 0) {
+            noResponse = true;
             continue;
+        }
 
         ACK ack(tmp);
 
@@ -202,13 +207,15 @@ int main(int argc, char **argv)
 
     left = 0;
     right = window_size;
-    end = false;
+    noResponse = false;
+    lastPacket = false;
 
     pthread_mutex_init(&lock, NULL);
     std::thread recv_ack(receiveACK);
 
-    while (int n = fillBuffer(buffer_size))
-    {
+    do {
+        int n = fillBuffer(buffer_size);
+
         printf("%d packet(s) in buffer\n\n", n);
 
         while (left < Packet::nextSequenceNumber)
@@ -240,7 +247,8 @@ int main(int argc, char **argv)
                 right = left + window_size;
                 printf("SHIFTED Left: %d Right %d\n", left, right);
 
-                if (left % buffer_size == 0){
+                if (left % buffer_size == 0)
+                {
                     pthread_mutex_unlock(&lock);
                     break;
                 }
@@ -271,10 +279,9 @@ int main(int argc, char **argv)
             }
         }
         printf("\n");
-    }
+    } while (!lastPacket);
 
-    end = true;
-    sendEOF();
+    printf("End\n");
 
     recv_ack.join();
     pthread_mutex_destroy(&lock);

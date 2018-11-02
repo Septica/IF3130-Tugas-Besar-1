@@ -34,6 +34,12 @@ void createSocket()
         perror("socket()");
         exit(1);
     }
+
+    struct timeval timeout;
+    timeout.tv_sec = 30;
+    timeout.tv_usec = 0;
+
+    setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
 }
 
 void setupServer(unsigned short port)
@@ -89,14 +95,17 @@ void sendACK(uint32_t sequence_number, bool is_acknowledged)
 
 int receivePacket()
 {
-    while (!is_end_frame_received)
+    while (!(is_end_frame_received && left > end_frame_seq_num))
     {
         char tmp[MAX_PACKET_SIZE];
         uint32_t client_address_size = sizeof(client);
         if (recvfrom(s, tmp, sizeof(tmp), 0, (struct sockaddr *)&client, &client_address_size) < 0)
         {
-            perror("recvfrom()");
-            exit(4);
+            if (left > end_frame_seq_num)
+            {
+                is_end_frame_received = true;
+            }
+            continue;
         }
 
         Packet packet(tmp);
@@ -104,36 +113,28 @@ int receivePacket()
         uint32_t seq = packet.getSequenceNumber();
         if (packet.checkChecksum())
         {
-            if (packet.getDataLength() > 0)
+            printf("Received Packet: %d\n", seq);
+            if (seq < right)
             {
-                printf("Received Packet: %d\n", seq);
-                if (seq < right)
+                if (seq >= left)
                 {
-                    if (seq >= left)
-                    {
-                        uint32_t length = packet.getDataLength();
-                        memcpy(buf + seq % buffer_size, packet.getData(), length);
+                    uint32_t length = packet.getDataLength();
+                    memcpy(buf + seq % buffer_size, packet.getData(), length);
 
-                        if (length < MAX_DATA_LENGTH)
-                        {
-                            end_frame_seq_num = seq;
-                            end_frame_data_len = length;
-                            is_end_frame_received = true;
-                        }
-
-                        pthread_mutex_lock(&lock);
-                        window_packet_mask[seq - left] = true;
-                        pthread_mutex_unlock(&lock);
+                    if (length < MAX_DATA_LENGTH) {
+                        end_frame_seq_num = seq;
+                        end_frame_data_len = length;
+                        is_end_frame_received = true;
+                    } else if (seq > end_frame_seq_num) {
+                        end_frame_seq_num = seq;
+                        end_frame_data_len = MAX_DATA_LENGTH;
                     }
-                    sendACK(seq, true);
+
+                    pthread_mutex_lock(&lock);
+                    window_packet_mask[seq - left] = true;
+                    pthread_mutex_unlock(&lock);
                 }
-            }
-            else
-            {
-                printf("EOF\n");
-                end_frame_seq_num = seq - 1;
-                end_frame_data_len = MAX_DATA_LENGTH;
-                is_end_frame_received = true;
+                sendACK(seq, true);
             }
         }
         else
@@ -169,6 +170,7 @@ int main(int argc, char *argv[])
 
     left = 0;
     right = window_size;
+    end_frame_seq_num = 0;
     is_end_frame_received = false;
 
     pthread_mutex_init(&lock, NULL);

@@ -277,6 +277,8 @@ int main(int argc, char **argv)
 
                 pthread_mutex_unlock(&lock);
             }
+            
+            if (noResponse && lastPacket) break;
         }
         printf("\n");
     } while (!lastPacket);

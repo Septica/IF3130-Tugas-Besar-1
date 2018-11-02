@@ -30,6 +30,7 @@ bool lastPacket, noResponse;
 
 pthread_mutex_t lock;
 
+// Membuat socket dan setting timeoutnya
 void createSocket()
 /* AF_INET as domain, SOCK_DGRAM as socket type for UDP connection */
 {
@@ -46,6 +47,7 @@ void createSocket()
     setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
 }
 
+// Bind socket ke client
 void bindClient()
 {
     struct sockaddr_in client;
@@ -61,6 +63,7 @@ void bindClient()
     }
 }
 
+// Menyiapkan variabel server
 void setupServer(in_addr_t addr, unsigned short port)
 {
     server.sin_family = AF_INET;
@@ -68,11 +71,13 @@ void setupServer(in_addr_t addr, unsigned short port)
     server.sin_port = port;
 }
 
+// Menutup socket
 void dealocateSocket()
 {
     close(s);
 }
 
+// Mengirimkan packet dan print informasi packet
 void sendPacket(Packet &packet)
 {
     printf("Sending...\n");
@@ -100,6 +105,7 @@ void sendPacket(Packet &packet)
     }
 }
 
+// Mengisi buffer sebanyak maksimal n paket
 int fillBuffer(int n)
 {
     printf("Filling buffer...\n");
@@ -120,6 +126,7 @@ int fillBuffer(int n)
     return n;
 }
 
+// Loop untuk menerima ACK dan menandai packet yang di-ACK
 void receiveACK()
 {
     while (!(noResponse && lastPacket))
@@ -163,6 +170,7 @@ void receiveACK()
     }
 }
 
+// Membuka file
 void prepareFile(char *filename)
 {
     printf("Opening '%s'...\n", filename);
@@ -173,12 +181,6 @@ void prepareFile(char *filename)
         exit(0);
     }
     printf("Success\n");
-}
-
-void sendEOF()
-{
-    Packet endPacket(NULL, 0);
-    sendPacket(endPacket);
 }
 
 int main(int argc, char **argv)
@@ -218,13 +220,14 @@ int main(int argc, char **argv)
 
         printf("%d packet(s) in buffer\n\n", n);
 
+        // Loop selama semua packet dalam buffer belum terkirim
         while (left < Packet::nextSequenceNumber)
         {
             pthread_mutex_lock(&lock);
 
             if (window_ack_mask[0])
             {
-
+                // Slide window
                 int shift;
                 for (shift = 1; window_ack_mask[shift] && shift < window_size; shift++)
                     ;
@@ -247,6 +250,7 @@ int main(int argc, char **argv)
                 right = left + window_size;
                 printf("SHIFTED Left: %d Right %d\n", left, right);
 
+                // Semua paket sudah terkirim
                 if (left % buffer_size == 0)
                 {
                     pthread_mutex_unlock(&lock);
@@ -256,6 +260,7 @@ int main(int argc, char **argv)
 
             pthread_mutex_unlock(&lock);
 
+            // Kirim packet dalam window jika kondisi terpenuhi
             for (int i = 0; i < window_size; i++)
             {
                 if (left % buffer_size + i >= n)

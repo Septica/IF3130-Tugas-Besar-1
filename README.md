@@ -18,12 +18,31 @@ P.S. filename pada SendFile adalah nama file yang akan dikirim misalkan "send.tx
     - Setelah itu, main thread akan mengirim packet ke host yang dituju. Packet akan dikirim jika packet belum pernah dikirim atau sudah timeout tetapi belum mendapatkan ACK.
     - Setelah dikirim, packet akan ditandai, dan menambahkan timeout ke packet tersebut.
     - Sendfile akan langsung berhenti setelah menerima semua ack atau tidak mendapat respon balik dari server dan telah mengirim semua paket.
+    - Penjelasan fungsi 
+        createSocket : membuat socket dan setting timeoutnya
+        bindClient : bind socket ke client
+        setupServer : menyiapkan variabel server
+        dealocateScoket : menutup socket
+        sendPacket : mengirimkan packet dan print informasi packet
+        fillBuffer : mengisi buffer sebanyak maksimal n paket
+        receiveACK : loop untuk menerima ACK dan menandai packet yang di-ACK
+        prepareFile : membuka file
 
 2. RecvFile
     - Menginisialisasi socket sesuai dengan parameter yang dimasukkan
     - Terdapat 2 thread, child thread akan melakukan penerimaan packet, packet akan dicek checksumnya, panjang datanya, lalu jika nomor packet yang diterima di bawah dari batas maksimum nomor window, maka ACK akan dikirim. Jika ada di dalam window akan dituliskan ke buffer dan ditandai.
     - Sedangkan parent thread melakukan penulisan ke file dan slding pada window. Jika terdapat shift yang dilakukan, akan file yang diterima akan ditulis.
     - Recvfile akan langsung berhenti setelah memproses packet terakhir. Packet terakhir didefinisikan sebagai packet yang memiliki data length yang lebih kecil dari length maximum, atau packet terakhir yang diterima setelah timeout.
+    - Penjelasan fungsi 
+        createSocket : membuat socket dan setting timeoutnya
+        bindClient : bind socket ke client
+        setupServer : menyiapkan variabel server
+        findOutPort : print port server
+        dealocateScoket : menutup socket
+        prepareFile : membuka file
+        sendACK : mengirimkan ACK
+        receivePacket : loop untuk menerima packet dan mengirim balik ACK
+        
 
 # Pembagian Tugas
 1. Felix Septianus - 13516041: SendFile

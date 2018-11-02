@@ -95,7 +95,7 @@ void sendACK(uint32_t sequence_number, bool is_acknowledged)
 
 int receivePacket()
 {
-    while (!is_end_frame_received)
+    while (!(is_end_frame_received && left > end_frame_seq_num))
     {
         char tmp[MAX_PACKET_SIZE];
         uint32_t client_address_size = sizeof(client);

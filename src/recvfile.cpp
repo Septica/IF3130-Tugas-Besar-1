@@ -27,6 +27,7 @@ bool is_end_frame_received;
 
 pthread_mutex_t lock;
 
+// Membuat socket dan setting timeoutnya
 void createSocket()
 {
     if ((s = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
@@ -42,6 +43,7 @@ void createSocket()
     setsockopt(s, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
 }
 
+// Menyiapkan variabel server
 void setupServer(unsigned short port)
 {
     server.sin_family = AF_INET;
@@ -49,6 +51,7 @@ void setupServer(unsigned short port)
     server.sin_addr.s_addr = INADDR_ANY;
 }
 
+// Bind server ke socket
 void bindServer()
 {
     if (bind(s, (struct sockaddr *)&server, sizeof(server)) < 0)
@@ -58,6 +61,7 @@ void bindServer()
     }
 }
 
+// Print port server
 void findOutPort()
 {
     uint32_t namelen = sizeof(server);
@@ -69,11 +73,13 @@ void findOutPort()
     printf("Port assigned is %d\n", ntohs(server.sin_port));
 }
 
+// Menutup socket
 void dealocateSocket()
 {
     close(s);
 }
 
+// Membuka file
 void prepareFile(char *fileName)
 {
     printf("Opening '%s'...\n", fileName);
@@ -86,6 +92,7 @@ void prepareFile(char *fileName)
     printf("Success\n");
 }
 
+// Mengirimkan ACK
 void sendACK(uint32_t sequence_number, bool is_acknowledged)
 {
     ACK ack(sequence_number, is_acknowledged);
@@ -93,6 +100,7 @@ void sendACK(uint32_t sequence_number, bool is_acknowledged)
     printf("Send %s: %d\n", is_acknowledged ? "ACK" : "NAK", sequence_number);
 }
 
+// Loop untuk menerima packet dan mengirim balik ACK
 int receivePacket()
 {
     while (!(is_end_frame_received && left > end_frame_seq_num))
